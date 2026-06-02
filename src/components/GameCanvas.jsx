@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 
 const SPEED = 80
@@ -51,7 +51,7 @@ class GameScene extends Phaser.Scene {
     if (!collisionLayer) {
       console.error('Collision layer not found!')
     } else {
-      collisionLayer.setVisible(false)
+      // collisionLayer.setVisible(false)
       collisionLayer.setCollisionByExclusion([-1])
     }
 
@@ -152,15 +152,44 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setZoom(getZoom(this.scale.width))
+    this.game.events.emit('zoomChanged', getZoom(this.scale.width))
     this.cameras.main.centerOn(this.player.x, this.player.y)
+
+    this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
+      const current = this.cameras.main.zoom
+      const next = Phaser.Math.Clamp(current + (deltaY > 0 ? -0.1 : 0.1), 1.0, 3.0)
+      this.cameras.main.setZoom(next)
+      this.game.events.emit('zoomChanged', next)
+    })
+
+    this.input.addPointer(1)
+    this.lastPinchDist = null
 
     this.scale.on('resize', (gameSize) => {
       this.cameras.main.setSize(gameSize.width, gameSize.height)
       this.cameras.main.setZoom(getZoom(gameSize.width))
+      this.game.events.emit('zoomChanged', getZoom(gameSize.width))
     })
   }
 
   update() {
+    const p1 = this.input.pointer1
+    const p2 = this.input.pointer2
+    if (p1.isDown && p2.isDown) {
+      const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y)
+      if (this.lastPinchDist !== null) {
+        const next = Phaser.Math.Clamp(
+          this.cameras.main.zoom + (dist - this.lastPinchDist) * 0.005,
+          1.0, 3.0
+        )
+        this.cameras.main.setZoom(next)
+        this.game.events.emit('zoomChanged', next)
+      }
+      this.lastPinchDist = dist
+    } else {
+      this.lastPinchDist = null
+    }
+
     if (!this.isMoving) return
 
     const dx       = this.targetX - this.player.x
@@ -193,6 +222,10 @@ class GameScene extends Phaser.Scene {
 
 export default function GameCanvas() {
   const containerRef = useRef(null)
+  const [zoom, setZoom] = useState(null)
+  const [showZoom, setShowZoom] = useState(false)
+  const gameRef = useRef(null)
+  const hideTimerRef = useRef(null)
 
   useEffect(() => {
     const config = {
@@ -211,16 +244,53 @@ export default function GameCanvas() {
     }
 
     const game = new Phaser.Game(config)
+    gameRef.current = game
+    game.events.on('zoomChanged', (v) => {
+      setZoom(+v.toFixed(1))
+      setShowZoom(true)
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setShowZoom(false), 1500)
+    })
 
     return () => {
+      clearTimeout(hideTimerRef.current)
       game.destroy(true)
     }
   }, [])
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}
+      />
+      <div style={{
+        position: 'fixed',
+        bottom: 24,
+        right: 24,
+        width: 64,
+        height: 20,
+        backgroundImage: 'url(/assets/ui/custom/zoom_bg.png)',
+        backgroundSize: '100% 100%',
+        imageRendering: 'pixelated',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: showZoom ? 1 : 0,
+        transition: 'opacity 0.3s',
+        pointerEvents: 'none',
+      }}>
+        <span style={{
+          fontFamily: "'pixelFont-7', monospace",
+          fontSize: 10,
+          color: '#3d2b1f',
+          fontWeight: 'bold',
+          lineHeight: 1,
+          userSelect: 'none',
+        }}>
+          {zoom}×
+        </span>
+      </div>
+    </>
   )
 }

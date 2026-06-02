@@ -1,3 +1,8 @@
+@font-face {
+  font-family: 'pixelFont-7';
+  src: url('/assets/ui/fonts/pixelFont-7-8x14-sproutLands.ttf') format('truetype');
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
