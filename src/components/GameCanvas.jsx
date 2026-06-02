@@ -18,8 +18,8 @@ class GameScene extends Phaser.Scene {
     this.load.image('Grass', '/assets/sprites/Tilesets/Grass.png')
     this.load.image('Tilled_Dirt_Wide', '/assets/sprites/Tilesets/Tilled_Dirt_Wide.png')
     this.load.image(
-      'Basic Grass Biom things 1',
-      '/assets/sprites/Objects/Basic Grass Biom things 1.png',
+      'Basic_Grass_Biom_things_1',
+      '/assets/sprites/Objects/Basic_Grass_Biom_things_1.png',
     )
     this.load.spritesheet('player', '/assets/sprites/Characters/Basic_Charakter_Spritesheet.png', {
       frameWidth: 48,
@@ -33,7 +33,7 @@ class GameScene extends Phaser.Scene {
 
     const grassTiles = map.addTilesetImage('Grass', 'Grass')
     const dirtTiles  = map.addTilesetImage('Tilled_Dirt_Wide', 'Tilled_Dirt_Wide')
-    const biomTiles  = map.addTilesetImage('Basic Grass Biom things 1', 'Basic Grass Biom things 1')
+    const biomTiles  = map.addTilesetImage('Basic_Grass_Biom_things_1', 'Basic_Grass_Biom_things_1')
 
     const tilesets = [grassTiles, dirtTiles, biomTiles]
 
@@ -44,7 +44,7 @@ class GameScene extends Phaser.Scene {
       console.error('Collision layer not found! Check layer name in Tiled.')
       console.log('Available layers:', map.layers.map(l => l.name))
     } else {
-      collisionLayer.setVisible(false)
+      // collisionLayer.setVisible(false)
       collisionLayer.setCollisionByExclusion([-1])
       console.log('Collision layer OK')
     }
@@ -119,6 +119,7 @@ class GameScene extends Phaser.Scene {
     this.marker = this.add.graphics()
     this.marker.fillStyle(0xffff00, 1)
     this.marker.fillCircle(0, 0, 4)
+    this.marker.setDepth(10)
     this.marker.setVisible(false)
 
     // move state
@@ -127,21 +128,25 @@ class GameScene extends Phaser.Scene {
     this.targetY  = 0
 
     this.input.on('pointerdown', (pointer) => {
-      const worldX = pointer.x + this.cameras.main.scrollX
-      const worldY = pointer.y + this.cameras.main.scrollY
+      const worldX = pointer.worldX
+      const worldY = pointer.worldY
       this.targetX  = worldX
       this.targetY  = worldY
       this.isMoving = true
       this.marker.setPosition(worldX, worldY).setVisible(true)
     })
 
+    const getZoom = (w) => w < 768 ? 1.5 : w < 1024 ? 3 : 2.5
+
     // camera
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
+    this.cameras.main.setZoom(getZoom(this.scale.width))
     this.cameras.main.centerOn(this.player.x, this.player.y)
 
     this.scale.on('resize', (gameSize) => {
       this.cameras.main.setSize(gameSize.width, gameSize.height)
+      this.cameras.main.setZoom(getZoom(gameSize.width))
     })
   }
 
