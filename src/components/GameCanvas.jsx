@@ -3,6 +3,12 @@ import Phaser from 'phaser'
 
 const SPEED = 80
 const ARRIVE_THRESHOLD = 4
+const MBTI_TYPES = [
+  'ENFJ', 'ENFP', 'ENTJ', 'ENTP',
+  'ESFJ', 'ESFP', 'ESTJ', 'ESTP',
+  'INFJ', 'INFP', 'INTJ', 'INTP',
+  'ISFJ', 'ISFP', 'ISTJ', 'ISTP',
+]
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -21,15 +27,17 @@ class GameScene extends Phaser.Scene {
       'Basic_Grass_Biom_things_1',
       '/assets/sprites/Objects/Basic_Grass_Biom_things_1.png',
     )
-    this.load.spritesheet('player', '/assets/sprites/Characters/Basic_Charakter_Spritesheet.png', {
-      frameWidth: 48,
-      frameHeight: 48,
+
+    MBTI_TYPES.forEach(mbti => {
+      this.load.spritesheet(mbti, `/assets/sprites/Characters/${mbti}_Charakter_Spritesheet.png`, {
+        frameWidth: 48,
+        frameHeight: 48,
+      })
     })
   }
 
   create() {
     const map = this.make.tilemap({ key: 'world' })
-    console.log('Map layers:', map.layers.map(l => l.name))
 
     const grassTiles = map.addTilesetImage('Grass', 'Grass')
     const dirtTiles  = map.addTilesetImage('Tilled_Dirt_Wide', 'Tilled_Dirt_Wide')
@@ -41,12 +49,10 @@ class GameScene extends Phaser.Scene {
     const objectsLayer   = map.createLayer('Objects', tilesets, 0, 0)
     const collisionLayer = map.createLayer('Collision', tilesets, 0, 0)
     if (!collisionLayer) {
-      console.error('Collision layer not found! Check layer name in Tiled.')
-      console.log('Available layers:', map.layers.map(l => l.name))
+      console.error('Collision layer not found!')
     } else {
-      // collisionLayer.setVisible(false)
+      collisionLayer.setVisible(false)
       collisionLayer.setCollisionByExclusion([-1])
-      console.log('Collision layer OK')
     }
 
     groundLayer.setDepth(0)
@@ -66,56 +72,60 @@ class GameScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, worldW, worldH)
 
-    // animations
-    this.anims.create({
-      key: 'walk-down',
-      frames: this.anims.generateFrameNumbers('player', { start: 0, end: 3 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-up',
-      frames: this.anims.generateFrameNumbers('player', { start: 4, end: 7 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-left',
-      frames: this.anims.generateFrameNumbers('player', { start: 8, end: 11 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-right',
-      frames: this.anims.generateFrameNumbers('player', { start: 12, end: 15 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'idle',
-      frames: this.anims.generateFrameNumbers('player', { frames: [0] }),
-      frameRate: 1,
-      repeat: 0,
+    // animations — สร้างให้ครบทุก MBTI
+    const DIRS = [
+      { key: 'walk-down',  start: 0,  end: 3  },
+      { key: 'walk-up',    start: 4,  end: 7  },
+      { key: 'walk-left',  start: 8,  end: 11 },
+      { key: 'walk-right', start: 12, end: 15 },
+    ]
+    MBTI_TYPES.forEach(mbti => {
+      DIRS.forEach(({ key, start, end }) => {
+        this.anims.create({
+          key: `${mbti}-${key}`,
+          frames: this.anims.generateFrameNumbers(mbti, { start, end }),
+          frameRate: 8,
+          repeat: -1,
+        })
+      })
+      this.anims.create({
+        key: `${mbti}-idle`,
+        frames: this.anims.generateFrameNumbers(mbti, { frames: [0] }),
+        frameRate: 1,
+        repeat: 0,
+      })
     })
 
     // player
+    this.mbtiIndex  = 0
+    this.currentMbti = MBTI_TYPES[0]
+
     const spawnX = this.cameras.main.width / 2
     const spawnY = this.cameras.main.height / 2
-    this.player = this.physics.add.sprite(spawnX, spawnY, 'player')
-    console.log('player created at', spawnX, spawnY, this.player)
-    const tex = this.textures.get('player')
-    const src = tex.source[0]
-    console.log('spritesheet size:', src.width, 'x', src.height)
-    console.log('total frames:', this.player.texture.frameTotal)
+    this.player = this.physics.add.sprite(spawnX, spawnY, this.currentMbti)
     this.player.setScale(2)
     this.player.setBodySize(16, 16)
     this.player.setDepth(5)
     this.player.setCollideWorldBounds(true)
-    this.player.play('idle')
+    this.player.play(`${this.currentMbti}-idle`)
 
     if (collisionLayer) this.physics.add.collider(this.player, collisionLayer)
 
-    // destination marker — drawn once at origin, repositioned on click
+    // วน MBTI ทุก 1 วินาที
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        this.mbtiIndex   = (this.mbtiIndex + 1) % MBTI_TYPES.length
+        this.currentMbti = MBTI_TYPES[this.mbtiIndex]
+
+        const curKey = this.player.anims.currentAnim?.key ?? ''
+        const suffix = curKey.includes('-') ? curKey.split('-').slice(1).join('-') : 'idle'
+        this.player.play(`${this.currentMbti}-${suffix}`)
+      },
+    })
+
+    // destination marker
     this.marker = this.add.graphics()
     this.marker.fillStyle(0xffff00, 1)
     this.marker.fillCircle(0, 0, 4)
@@ -159,7 +169,7 @@ class GameScene extends Phaser.Scene {
 
     if (distance < ARRIVE_THRESHOLD) {
       this.player.setVelocity(0, 0)
-      this.player.play('idle')
+      this.player.play(`${this.currentMbti}-idle`)
       this.isMoving = false
       this.marker.setVisible(false)
       return
@@ -170,10 +180,11 @@ class GameScene extends Phaser.Scene {
       (dy / distance) * SPEED,
     )
 
-    const animKey = Math.abs(dx) > Math.abs(dy)
+    const dir = Math.abs(dx) > Math.abs(dy)
       ? (dx > 0 ? 'walk-right' : 'walk-left')
       : (dy > 0 ? 'walk-down'  : 'walk-up')
 
+    const animKey = `${this.currentMbti}-${dir}`
     if (this.player.anims.currentAnim?.key !== animKey) {
       this.player.play(animKey)
     }
