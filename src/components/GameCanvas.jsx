@@ -152,8 +152,9 @@ class GameScene extends Phaser.Scene {
     const spawnX = 35 * 16 * mapScale
     const spawnY = 35 * 16 * mapScale
     this.player = this.physics.add.sprite(spawnX, spawnY, this.currentMbti)
-    this.player.setScale(5 / getZoom(this.scale.width))
-    this.player.setBodySize(16, 16)
+    this.player.setScale(2)
+    this.player.body.setSize(48, 48)
+    this.player.body.setOffset(0, 0)
     this.player.setDepth(5)
     this.player.setCollideWorldBounds(true)
     this.player.play(`${this.currentMbti}-idle`)
@@ -239,7 +240,6 @@ class GameScene extends Phaser.Scene {
       const newZoom = getZoom(gameSize.width)
       this.cameras.main.setSize(gameSize.width, gameSize.height)
       this.cameras.main.setZoom(newZoom)
-      this.player.setScale(5 / newZoom)
       this.game.events.emit('zoomChanged', newZoom)
     })
   }
@@ -449,7 +449,7 @@ class IndoorScene extends Phaser.Scene {
     }
 
     this.player = this.physics.add.sprite(spawnX, spawnY, this.currentMbti)
-    this.player.setScale(3)
+    this.player.setScale(3.5)
     this.player.body.setSize(48, 48)
     this.player.body.setOffset(0, 0)
     this.player.setDepth(5)
@@ -535,7 +535,6 @@ class IndoorScene extends Phaser.Scene {
       const newZoom = getZoom(gameSize.width)
       this.cameras.main.setSize(gameSize.width, gameSize.height)
       this.cameras.main.setZoom(newZoom)
-      this.player.setScale(4)
       this.game.events.emit('zoomChanged', newZoom)
     })
   }
