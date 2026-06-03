@@ -13,6 +13,7 @@ const ARRIVE_THRESHOLD = 4
 const DOUBLE_CLICK_MS = 300
 
 const PLAYER_KEY  = 'Basic_Charakter'
+const getZoom = (w) => w < 768 ? 1.5 : w < 1024 ? 3 : 2.5
 const MBTI_TYPES  = [
   'ENFJ', 'ENFP', 'ENTJ', 'ENTP',
   'ESFJ', 'ESFP', 'ESTJ', 'ESTP',
@@ -144,7 +145,7 @@ class GameScene extends Phaser.Scene {
     const spawnX = this.cameras.main.width / 2
     const spawnY = this.cameras.main.height / 2
     this.player = this.physics.add.sprite(spawnX, spawnY, this.currentMbti)
-    this.player.setScale(2)
+    this.player.setScale(5 / getZoom(this.scale.width))
     this.player.setBodySize(16, 16)
     this.player.setDepth(5)
     this.player.setCollideWorldBounds(true)
@@ -181,8 +182,6 @@ class GameScene extends Phaser.Scene {
       this.marker.setPosition(worldX, worldY).setVisible(true)
     })
 
-    const getZoom = (w) => w < 768 ? 1.5 : w < 1024 ? 3 : 2.5
-
     // camera
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -209,9 +208,11 @@ class GameScene extends Phaser.Scene {
     this.usingWasd = false
 
     this.scale.on('resize', (gameSize) => {
+      const newZoom = getZoom(gameSize.width)
       this.cameras.main.setSize(gameSize.width, gameSize.height)
-      this.cameras.main.setZoom(getZoom(gameSize.width))
-      this.game.events.emit('zoomChanged', getZoom(gameSize.width))
+      this.cameras.main.setZoom(newZoom)
+      this.player.setScale(5 / newZoom)
+      this.game.events.emit('zoomChanged', newZoom)
     })
   }
 
