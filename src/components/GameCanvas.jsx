@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 
+// ── CHARACTER MODE ─────────────────────────────
+// 0 = Basic_Charakter (1 ตัว)
+// 1 = MBTI rotation (16 ตัว สลับทุก 1 วิ)
+const CHARACTER_MODE = 0
+// ───────────────────────────────────────────────
+
 const SPEED = 80
+const SPRINT_MULTIPLIER = 2
 const ARRIVE_THRESHOLD = 4
-const MBTI_TYPES = [
+const DOUBLE_CLICK_MS = 300
+
+const PLAYER_KEY  = 'Basic_Charakter'
+const MBTI_TYPES  = [
   'ENFJ', 'ENFP', 'ENTJ', 'ENTP',
   'ESFJ', 'ESFP', 'ESTJ', 'ESTP',
   'INFJ', 'INFP', 'INTJ', 'INTP',
@@ -28,12 +38,17 @@ class GameScene extends Phaser.Scene {
       '/assets/sprites/Objects/Basic_Grass_Biom_things_1.png',
     )
 
-    MBTI_TYPES.forEach(mbti => {
-      this.load.spritesheet(mbti, `/assets/sprites/Characters/${mbti}_Charakter_Spritesheet.png`, {
-        frameWidth: 48,
-        frameHeight: 48,
+    if (CHARACTER_MODE === 0) {
+      this.load.spritesheet(PLAYER_KEY, '/assets/sprites/Characters/Play_Charakter_Spritesheet.png', {
+        frameWidth: 48, frameHeight: 48,
       })
-    })
+    } else {
+      MBTI_TYPES.forEach(mbti => {
+        this.load.spritesheet(mbti, `/assets/sprites/Characters/${mbti}_Charakter_Spritesheet.png`, {
+          frameWidth: 48, frameHeight: 48,
+        })
+      })
+    }
   }
 
   create() {
@@ -72,33 +87,59 @@ class GameScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, worldW, worldH)
 
-    // animations — สร้างให้ครบทุก MBTI
     const DIRS = [
       { key: 'walk-down',  start: 0,  end: 3  },
       { key: 'walk-up',    start: 4,  end: 7  },
       { key: 'walk-left',  start: 8,  end: 11 },
       { key: 'walk-right', start: 12, end: 15 },
     ]
-    MBTI_TYPES.forEach(mbti => {
+    if (CHARACTER_MODE === 0) {
       DIRS.forEach(({ key, start, end }) => {
         this.anims.create({
-          key: `${mbti}-${key}`,
-          frames: this.anims.generateFrameNumbers(mbti, { start, end }),
+          key: `${PLAYER_KEY}-${key}`,
+          frames: this.anims.generateFrameNumbers(PLAYER_KEY, { start, end }),
           frameRate: 8,
           repeat: -1,
         })
       })
       this.anims.create({
-        key: `${mbti}-idle`,
-        frames: this.anims.generateFrameNumbers(mbti, { frames: [0] }),
+        key: `${PLAYER_KEY}-idle`,
+        frames: this.anims.generateFrameNumbers(PLAYER_KEY, { frames: [0] }),
         frameRate: 1,
         repeat: 0,
       })
-    })
-
-    // player
-    this.mbtiIndex  = 0
-    this.currentMbti = MBTI_TYPES[0]
+      this.currentMbti = PLAYER_KEY
+    } else {
+      MBTI_TYPES.forEach(mbti => {
+        DIRS.forEach(({ key, start, end }) => {
+          this.anims.create({
+            key: `${mbti}-${key}`,
+            frames: this.anims.generateFrameNumbers(mbti, { start, end }),
+            frameRate: 8,
+            repeat: -1,
+          })
+        })
+        this.anims.create({
+          key: `${mbti}-idle`,
+          frames: this.anims.generateFrameNumbers(mbti, { frames: [0] }),
+          frameRate: 1,
+          repeat: 0,
+        })
+      })
+      this.mbtiIndex   = 0
+      this.currentMbti = MBTI_TYPES[0]
+      this.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: () => {
+          this.mbtiIndex   = (this.mbtiIndex + 1) % MBTI_TYPES.length
+          this.currentMbti = MBTI_TYPES[this.mbtiIndex]
+          const curKey = this.player.anims.currentAnim?.key ?? ''
+          const suffix = curKey.includes('-') ? curKey.split('-').slice(1).join('-') : 'idle'
+          this.player.play(`${this.currentMbti}-${suffix}`)
+        },
+      })
+    }
 
     const spawnX = this.cameras.main.width / 2
     const spawnY = this.cameras.main.height / 2
@@ -111,20 +152,6 @@ class GameScene extends Phaser.Scene {
 
     if (collisionLayer) this.physics.add.collider(this.player, collisionLayer)
 
-    // วน MBTI ทุก 1 วินาที
-    this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => {
-        this.mbtiIndex   = (this.mbtiIndex + 1) % MBTI_TYPES.length
-        this.currentMbti = MBTI_TYPES[this.mbtiIndex]
-
-        const curKey = this.player.anims.currentAnim?.key ?? ''
-        const suffix = curKey.includes('-') ? curKey.split('-').slice(1).join('-') : 'idle'
-        this.player.play(`${this.currentMbti}-${suffix}`)
-      },
-    })
-
     // destination marker
     this.marker = this.add.graphics()
     this.marker.fillStyle(0xffff00, 1)
@@ -136,8 +163,16 @@ class GameScene extends Phaser.Scene {
     this.isMoving = false
     this.targetX  = 0
     this.targetY  = 0
+    this.isSprinting  = false
+    this.lastClickTime = 0
 
     this.input.on('pointerdown', (pointer) => {
+      const now = this.time.now
+      if (now - this.lastClickTime < DOUBLE_CLICK_MS) {
+        this.isSprinting = !this.isSprinting
+      }
+      this.lastClickTime = now
+
       const worldX = pointer.worldX
       const worldY = pointer.worldY
       this.targetX  = worldX
@@ -165,6 +200,14 @@ class GameScene extends Phaser.Scene {
     this.input.addPointer(1)
     this.lastPinchDist = null
 
+    this.wasd = this.input.keyboard.addKeys({
+      up:    Phaser.Input.Keyboard.KeyCodes.W,
+      down:  Phaser.Input.Keyboard.KeyCodes.S,
+      left:  Phaser.Input.Keyboard.KeyCodes.A,
+      right: Phaser.Input.Keyboard.KeyCodes.D,
+    })
+    this.usingWasd = false
+
     this.scale.on('resize', (gameSize) => {
       this.cameras.main.setSize(gameSize.width, gameSize.height)
       this.cameras.main.setZoom(getZoom(gameSize.width))
@@ -190,6 +233,43 @@ class GameScene extends Phaser.Scene {
       this.lastPinchDist = null
     }
 
+    const spd = SPEED * (this.isSprinting ? SPRINT_MULTIPLIER : 1)
+
+    const { up, down, left, right } = this.wasd
+    const wasdActive = up.isDown || down.isDown || left.isDown || right.isDown
+
+    if (wasdActive) {
+      this.usingWasd = true
+      this.isMoving = false
+      this.marker.setVisible(false)
+
+      let vx = 0, vy = 0
+      if (left.isDown)  vx -= spd
+      if (right.isDown) vx += spd
+      if (up.isDown)    vy -= spd
+      if (down.isDown)  vy += spd
+      if (vx !== 0 && vy !== 0) { vx *= Math.SQRT1_2; vy *= Math.SQRT1_2 }
+      this.player.setVelocity(vx, vy)
+
+      if (vx === 0 && vy === 0) {
+        const idleKey = `${this.currentMbti}-idle`
+        if (this.player.anims.currentAnim?.key !== idleKey) this.player.play(idleKey)
+      } else {
+        const dir = Math.abs(vx) >= Math.abs(vy)
+          ? (vx > 0 ? 'walk-right' : 'walk-left')
+          : (vy > 0 ? 'walk-down' : 'walk-up')
+        const animKey = `${this.currentMbti}-${dir}`
+        if (this.player.anims.currentAnim?.key !== animKey) this.player.play(animKey)
+      }
+      return
+    }
+
+    if (this.usingWasd) {
+      this.usingWasd = false
+      this.player.setVelocity(0, 0)
+      this.player.play(`${this.currentMbti}-idle`)
+    }
+
     if (!this.isMoving) return
 
     const dx       = this.targetX - this.player.x
@@ -200,13 +280,14 @@ class GameScene extends Phaser.Scene {
       this.player.setVelocity(0, 0)
       this.player.play(`${this.currentMbti}-idle`)
       this.isMoving = false
+      this.isSprinting = false
       this.marker.setVisible(false)
       return
     }
 
     this.player.setVelocity(
-      (dx / distance) * SPEED,
-      (dy / distance) * SPEED,
+      (dx / distance) * spd,
+      (dy / distance) * spd,
     )
 
     const dir = Math.abs(dx) > Math.abs(dy)
